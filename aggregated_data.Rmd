@@ -1,0 +1,757 @@
+---
+title: "Speak about Heat"
+author: "He Guo"
+date: "7/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(stringr)
+library(chron)
+library(ggpubr)
+theme_set(theme_pubr())
+```
+
+
+```{r, echo=FALSE}
+p_5.day1_H<-read.csv("P_5/H_1E0000005EDAA941_090319.csv")
+p_5.day2_H<-read.csv("P_5/H_1E0000005EDAA941_091619.csv")
+p_5.day1_T<-read.csv("P_5/T_1E0000005EDAA941_090319.csv")
+p_5.day2_T<-read.csv("P_5/T_1E0000005EDAA941_091619.csv")
+p_5.day1_H$Date.Time<-as.character(p_5.day1_H$Date.Time)
+p_5.day2_H$Date.Time<-as.character(p_5.day2_H$Date.Time)
+p_5.day1_T$Date.Time<-as.character(p_5.day1_T$Date.Time)
+p_5.day2_T$Date.Time<-as.character(p_5.day2_T$Date.Time)
+```
+
+Matching the time line of HOBO_P5 and p5.  Since the HOBO_P5 doesn't have data in 2009, so we 
+delete it.
+
+```{r}
+P5_H<-rbind(p_5.day1_H,p_5.day2_H)
+P5_T<-rbind(p_5.day1_T,p_5.day2_T)
+
+
+P5<-P5_H %>% inner_join(P5_T, by = c("Date.Time"="Date.Time"))
+P5<-P5 %>% 
+  rename(
+    Humidity = Value.x,
+    Temperature=Value.y,
+    Unit.H = Unit.x,
+    Unit.T = Unit.y
+    )
+split<-str_split_fixed(P5$Date.Time, " ", 2)
+P5$Date<-as.character(split[,1])
+P5$Time<-as.character(split[,2]) 
+add_zero<-rep("0",nrow(P5))
+P5$Date<-paste(add_zero, P5$Date, sep="")
+### Change 12-hour clock into 24-hour clock 
+x<-format(strptime(P5$Time, "%I:%M:%S %p"), "%H:%M:%S")
+P5_2009 <-P5[ grep("2009", P5$Date),]
+P5<-P5[- grep("2009", P5$Date),]
+
+
+x<-format(strptime(P5$Time, "%I:%M:%S %p"), "%H:%M:%S")
+
+x<-as.POSIXct(x, format = "%H:%M:%S")
+t<-x - 1 
+t<-str_split_fixed(t, " ", 2)
+P5$Time<-t[,2]
+P5$Time_line <- paste(P5$Date,P5$Time)
+
+```
+
+```{r}
+
+P5_2009$Date<-substring(P5_2009$Date, 4)
+P5_2009$Time<-stringr::str_pad(P5_2009$Time, 5, side = "left", pad = 0)
+P5_2009$Time<-paste0(P5_2009$Time, ":00")
+P5_2009_sub<-P5_2009[1:2382,]
+P5_2009<-P5_2009[-(1:2382),]
+P5_2009_sub$Date<-paste0(substring(P5_2009_sub$Date, 1,3), "0",substring(P5_2009_sub$Date, 4,7))
+P5_2009<-rbind(P5_2009_sub,P5_2009)
+P5_2009$Time_line <- paste(P5_2009$Date,P5_2009$Time)
+P5<-rbind(P5,P5_2009)
+
+```
+
+
+
+
+
+```{r}
+HOBO_P5 <- readLines("P_5/20438072_id5.csv")
+Sys.setlocale('LC_ALL','C')
+HOBO_P5 <- grep("Node Name,RTC_date", HOBO_P5, invert=TRUE, value=TRUE)
+HOBO_P5 <- read.csv(textConnection(paste0(HOBO_P5, collapse="\n")),
+                  header=FALSE, stringsAsFactors=FALSE)
+HOBO_P5<-HOBO_P5[-1,]
+names(HOBO_P5) <- as.matrix(HOBO_P5[1, ])
+HOBO_P5 <- HOBO_P5[-1, ]
+rownames(HOBO_P5) <- HOBO_P5[,1]
+HOBO_P5$Temp<-HOBO_P5[,3]
+HOBO_P5$DewPt <-HOBO_P5[,5]
+HOBO_P5<-HOBO_P5[,-c(1,3,5,6,7)]
+
+
+HOBO_P5<-HOBO_P5 %>% 
+  rename(
+    Date.Time = `Date Time, GMT-04:00`,
+    RH = `RH, % (LGR S/N: 20438072, SEN S/N: 20438072)`
+    )
+split<-str_split_fixed(HOBO_P5$Date.Time, " ", 2)
+HOBO_P5$Date<-as.character(split[,1])
+HOBO_P5$Time<-as.character(split[,2]) 
+HOBO_P5$Time<-format(strptime(HOBO_P5$Time, "%I:%M:%S %p"), "%H:%M:%S")
+HOBO_P5$Time_line <- paste(HOBO_P5$Date,HOBO_P5$Time)
+HOBO_P5 <-HOBO_P5[,-c(1)]
+
+
+```
+
+
+
+```{r}
+HOBO_P5$Time_line <-as.character(HOBO_P5$Time_line)
+P5$Time_line <-as.character(P5$Time_line)
+
+full_P5<-HOBO_P5 %>% full_join(P5, by = c("Time_line"="Time_line"))
+
+full_P5<-full_P5[,-c(4,5,7)]
+
+
+full_P5<-full_P5%>% 
+  rename(
+    Date = Date.y,
+    Time = Time.y
+    )
+
+```
+
+
+
+```{r}
+p_6.day_H<-read.csv("P_6/H_A90000005ED58B41_091619.csv")
+p_6.day_T<-read.csv("P_6/T_A90000005ED58B41_091619.csv")
+p_6.day_H$Date.Time<-as.character(p_6.day_H$Date.Time)
+p_6.day_T$Date.Time<-as.character(p_6.day_T$Date.Time)
+
+
+P6<-p_6.day_T %>% inner_join(p_6.day_H, by = c("Date.Time"="Date.Time"))
+
+P6<-P6 %>% 
+  rename(
+    Humidity = Value.x,
+    Temperature=Value.y,
+    Unit.H = Unit.x,
+    Unit.T = Unit.y
+    )
+split<-str_split_fixed(P6$Date.Time, " ", 2)
+P6$Date<-as.character(split[,1])
+P6$Time<-as.character(split[,2]) 
+### Change 12-hour clock into 24-hour clock 
+x<-format(strptime(P6$Time, "%I:%M:%S %p"), "%H:%M:%S")
+
+P6_2009 <-P6[ grep("2009", P6$Date),]
+P6<-P6[- grep("2009", P6$Date),]
+
+add_zero<-rep("0",nrow(P6))
+P6$Date<-paste(add_zero, P6$Date, sep="")
+x<-format(strptime(P6$Time, "%I:%M:%S %p"), "%H:%M:%S")
+x<-as.POSIXct(x, format = "%H:%M:%S")
+t<-x - 1 
+t<-str_split_fixed(t, " ", 2)
+P6$Time<-t[,2]
+P6$Time_line <- paste(P6$Date,P6$Time)
+unique(P6$Date)
+```
+
+```{r}
+
+P6_2009$Date<-substring(P6_2009$Date, 3)
+P6_2009$Time<-stringr::str_pad(P6_2009$Time, 5, side = "left", pad = 0)
+P6_2009$Time<-paste0(P6_2009$Time, ":00")
+
+index<-which(P6_2009$Date.Time== "2009/9/19 23:55")	
+P6_2009_sub<-P6_2009[1:index,]
+P6_2009<-P6_2009[-(1:index),]
+P6_2009_sub$Date<-paste0(substring(P6_2009_sub$Date, 1,3), "0",substring(P6_2009_sub$Date, 4,7))
+P6_2009<-rbind(P6_2009_sub,P6_2009)
+P6_2009$Time_line <- paste(P6_2009$Date,P6_2009$Time)
+P6<-rbind(P6,P6_2009)
+unique(P6$Date)
+```
+
+
+```{r}
+HOBO_P6 <- readLines("P_6/20438073_id6.csv")
+Sys.setlocale('LC_ALL','C')
+HOBO_P6 <- grep("Node Name,RTC_date", HOBO_P6, invert=TRUE, value=TRUE)
+HOBO_P6 <- read.csv(textConnection(paste0(HOBO_P6, collapse="\n")),
+                  header=FALSE, stringsAsFactors=FALSE)
+HOBO_P6<-HOBO_P6[-1,]
+names(HOBO_P6) <- as.matrix(HOBO_P6[1, ])
+HOBO_P6 <- HOBO_P6[-1, ]
+rownames(HOBO_P6) <- HOBO_P6[,1]
+HOBO_P6$Temp<-HOBO_P6[,3]
+HOBO_P6$DewPt <-HOBO_P6[,5]
+HOBO_P6<-HOBO_P6[,-c(1,3,5,6,7)]
+
+
+HOBO_P6<-HOBO_P6 %>% 
+  rename(
+    Date.Time = `Date Time, GMT-04:00`,
+    RH = `RH, % (LGR S/N: 20438073, SEN S/N: 20438073)`
+    )
+
+split<-str_split_fixed(HOBO_P6$Date.Time, " ", 2)
+HOBO_P6$Date<-as.character(split[,1])
+HOBO_P6$Time<-as.character(split[,2]) 
+HOBO_P6$Time<-format(strptime(HOBO_P6$Time, "%I:%M:%S %p"), "%H:%M:%S")
+HOBO_P6$Time_line <- paste(HOBO_P6$Date,HOBO_P6$Time)
+```
+
+
+
+```{r}
+HOBO_P6$Time_line <-as.character(HOBO_P6$Time_line)
+
+
+P6$Time_line <-as.character(P6$Time_line)
+unique(P6$Date)
+
+full_P6<-HOBO_P6 %>% full_join(P6, by = c("Time_line"="Time_line"))
+full_P6<-full_P6[,-c(1,5,6,8)]
+
+
+full_P6<-full_P6%>% 
+  rename(
+    Date = Date.y,
+    Time = Time.y
+    )
+```
+
+
+
+```{r}
+p_7.day_H<-read.csv("P_7/H_170000005ED4FE41_091619.csv")
+p_7.day_T<-read.csv("P_7/T_170000005ED4FE41_091619.csv")
+p_7.day_H$Date.Time<-as.character(p_7.day_H$Date.Time)
+p_7.day_T$Date.Time<-as.character(p_7.day_T$Date.Time)
+
+
+P7<-p_7.day_T %>% inner_join(p_7.day_H, by = c("Date.Time"="Date.Time"))
+
+P7<-P7 %>% 
+  rename(
+    Humidity = Value.x,
+    Temperature=Value.y,
+    Unit.H = Unit.x,
+    Unit.T = Unit.y
+    )
+split<-str_split_fixed(P7$Date.Time, " ", 2)
+P7$Date<-as.character(split[,1])
+P7$Time<-as.character(split[,2]) 
+### Change 12-hour clock into 24-hour clock 
+x<-format(strptime(P7$Time, "%I:%M:%S %p"), "%H:%M:%S")
+P7_2009 <-P7[ grep("2009", P7$Date),]
+P7<-P7[- grep("2009", P7$Date),]
+add_zero<-rep("0",nrow(P7))
+P7$Date<-paste(add_zero, P7$Date, sep="")
+x<-format(strptime(P7$Time, "%I:%M:%S %p"), "%H:%M:%S")
+x<-as.POSIXct(x, format = "%H:%M:%S")
+t<-x - 1 
+t<-str_split_fixed(t, " ", 2)
+P7$Time<-t[,2]
+P7$Time_line <- paste(P7$Date,P7$Time)
+unique(P7$Date)
+```
+```{r}
+P7_2009$Date<-substring(P7_2009$Date, 3)
+P7_2009$Time<-stringr::str_pad(P7_2009$Time, 5, side = "left", pad = 0)
+P7_2009$Time<-paste0(P7_2009$Time, ":00")
+
+index<-which(P7_2009$Date.Time== "2009/9/19 23:55")	
+P7_2009_sub<-P7_2009[1:index,]
+P7_2009<-P7_2009[-(1:index),]
+P7_2009_sub$Date<-paste0(substring(P7_2009_sub$Date, 1,3), "0",substring(P7_2009_sub$Date, 4,7))
+P7_2009<-rbind(P7_2009_sub,P7_2009)
+P7_2009$Time_line <- paste(P7_2009$Date,P7_2009$Time)
+P7<-rbind(P7,P7_2009)
+unique(P7$Date)
+```
+
+
+
+```{r}
+HOBO_P7 <- readLines("P_7/20438077_id7.csv")
+Sys.setlocale('LC_ALL','C')
+HOBO_P7 <- grep("Node Name,RTC_date", HOBO_P7, invert=TRUE, value=TRUE)
+HOBO_P7 <- read.csv(textConnection(paste0(HOBO_P7, collapse="\n")),
+                  header=FALSE, stringsAsFactors=FALSE)
+HOBO_P7<-HOBO_P7[-1,]
+names(HOBO_P7) <- as.matrix(HOBO_P7[1, ])
+HOBO_P7 <- HOBO_P7[-1, ]
+rownames(HOBO_P7) <- HOBO_P7[,1]
+HOBO_P7$Temp<-HOBO_P7[,3]
+HOBO_P7$DewPt <-HOBO_P7[,5]
+HOBO_P7<-HOBO_P7[,-c(1,3,5,6,7)]
+
+
+HOBO_P7<-HOBO_P7 %>% 
+  rename(
+    Date.Time = `Date Time, GMT-04:00`,
+    RH = `RH, % (LGR S/N: 20438077, SEN S/N: 20438077)`
+    )
+
+split<-str_split_fixed(HOBO_P7$Date.Time, " ", 2)
+HOBO_P7$Date<-as.character(split[,1])
+HOBO_P7$Time<-as.character(split[,2]) 
+HOBO_P7$Time<-format(strptime(HOBO_P7$Time, "%I:%M:%S %p"), "%H:%M:%S")
+HOBO_P7$Time_line <- paste(HOBO_P7$Date,HOBO_P7$Time)
+```
+
+
+
+```{r}
+HOBO_P7$Time_line <-as.character(HOBO_P7$Time_line)
+P7$Time_line <-as.character(P7$Time_line)
+
+full_P7<-HOBO_P7 %>% full_join(P7, by = c("Time_line"="Time_line"))
+
+full_P7<-full_P7[,-c(1,5,6,8)]
+
+
+full_P7<-full_P7%>% 
+  rename(
+    Date = Date.y,
+    Time = Time.y
+    )
+```
+
+
+
+```{r pressure, echo=FALSE}
+p_9.day1_H<-read.csv("P_9/H_E60000005ED60E41_091119.csv")
+p_9.day2_H<-read.csv("P_9/H_E60000005ED60E41_091619.csv")
+p_9.day1_T<-read.csv("P_9/T_E60000005ED60E41_091119.csv")
+p_9.day2_T<-read.csv("P_9/T_E60000005ED60E41_091619.csv")
+p_9.day1_H$Date.Time<-as.character(p_9.day1_H$Date.Time)
+p_9.day2_H$Date.Time<-as.character(p_9.day2_H$Date.Time)
+p_9.day1_T$Date.Time<-as.character(p_9.day1_T$Date.Time)
+p_9.day1_T$Date.Time<-as.character(p_9.day1_T$Date.Time)
+```
+
+
+
+```{r}
+
+P9_H<-rbind(p_9.day1_H,p_9.day2_H)
+P9_T<-rbind(p_9.day1_T,p_9.day2_T)
+
+
+P9<-P9_H %>% inner_join(P9_T, by = c("Date.Time"="Date.Time"))
+P9<-P9 %>% 
+  rename(
+    Humidity = Value.x,
+    Temperature=Value.y,
+    Unit.H = Unit.x,
+    Unit.T = Unit.y
+    )
+split<-str_split_fixed(P9$Date.Time, " ", 2)
+P9$Date<-as.character(split[,1])
+P9$Time<-as.character(split[,2]) 
+
+### Change 12-hour clock into 24-hour clock 
+x<-format(strptime(P9$Time, "%I:%M:%S %p"), "%H:%M:%S")
+P9_2009 <-P9[ grep("2009", P9$Date),]
+P9<-P9[- grep("2009", P9$Date),]
+add_zero<-rep("0",nrow(P9))
+P9$Date<-paste(add_zero, P9$Date, sep="")
+x<-format(strptime(P9$Time, "%I:%M:%S %p"), "%H:%M:%S")
+
+x<-as.POSIXct(x, format = "%H:%M:%S")
+t<-x - 1 
+t<-t - 2*60
+t<-str_split_fixed(t, " ", 2)
+P9$Time<-t[,2]
+P9$Time_line <- paste(P9$Date,P9$Time)
+
+```
+
+
+```{r}
+P9_2009$Date<-substring(P9_2009$Date, 3)
+P9_2009$Time<-stringr::str_pad(P9_2009$Time, 5, side = "left", pad = 0)
+P9_2009$Time<-paste0(P9_2009$Time, ":00")
+P9_2009<-unique(P9_2009)
+index<-which(P9_2009$Date.Time== "2009/9/19 23:57")	
+P9_2009_sub<-P9_2009[1:index,]
+P9_2009<-P9_2009[-(1:index),]
+P9_2009_sub$Date<-paste0(substring(P9_2009_sub$Date, 1,3), "0",substring(P9_2009_sub$Date, 4,7))
+P9_2009<-rbind(P9_2009_sub,P9_2009)
+x<-format(strptime(P9_2009$Time[1], "%I:%M:%S %p"), "%H:%M:%S")
+
+x<-as.POSIXct(P9_2009$Time, format = "%H:%M:%S")
+
+t<-x - 2*60
+t<-str_split_fixed(t, " ", 2)
+P9_2009$Time<-t[,2]
+
+P9_2009$Time_line <- paste(P9_2009$Date,P9_2009$Time)
+P9<-rbind(P9,P9_2009)
+
+```
+
+
+```{r}
+HOBO_P9 <- readLines("P_9/20574609_id9.csv")
+Sys.setlocale('LC_ALL','C')
+HOBO_P9 <- grep("Node Name,RTC_date", HOBO_P9, invert=TRUE, value=TRUE)
+HOBO_P9 <- read.csv(textConnection(paste0(HOBO_P9, collapse="\n")),
+                  header=FALSE, stringsAsFactors=FALSE)
+HOBO_P9<-HOBO_P9[-1,]
+names(HOBO_P9) <- as.matrix(HOBO_P9[1, ])
+HOBO_P9 <- HOBO_P9[-1, ]
+rownames(HOBO_P9) <- HOBO_P9[,1]
+HOBO_P9$Temp<-HOBO_P9[,3]
+HOBO_P9$DewPt <-HOBO_P9[,5]
+HOBO_P9<-HOBO_P9[,-c(1,3,5,6,7)]
+
+
+
+HOBO_P9<-HOBO_P9 %>% 
+  rename(
+    Date.Time = `Date Time, GMT-04:00`,
+    RH = `RH, % (LGR S/N: 20574609, SEN S/N: 20574609)`
+    )
+
+split<-str_split_fixed(HOBO_P9$Date.Time, " ", 2)
+HOBO_P9$Date<-as.character(split[,1])
+HOBO_P9$Time<-as.character(split[,2]) 
+HOBO_P9$Time<-format(strptime(HOBO_P9$Time, "%I:%M:%S %p"), "%H:%M:%S")
+HOBO_P9$Time_line <- paste(HOBO_P9$Date,HOBO_P9$Time)
+```
+
+
+```{r}
+HOBO_P9$Time_line <-as.character(HOBO_P9$Time_line)
+P9$Time_line <-as.character(P9$Time_line)
+
+full_P9<-HOBO_P9 %>% full_join(P9, by = c("Time_line"="Time_line"))
+
+full_P9<-full_P9[,-c(1,5,6,8)]
+
+
+full_P9<-full_P9%>% 
+  rename(
+    Date = Date.y,
+    Time = Time.y
+    )
+```
+
+
+
+
+```{r pressure, echo=FALSE}
+p_11.day1_H<-read.csv("P_11/H_7E0000005EDD9D41_090319.csv")
+p_11.day2_H<-read.csv("P_11/H_7E0000005EDD9D41_091619.csv")
+p_11.day1_T<-read.csv("P_11/T_7E0000005EDD9D41_090319.csv")
+p_11.day2_T<-read.csv("P_11/T_7E0000005EDD9D41_091619.csv")
+p_11.day1_H$Date.Time<-as.character(p_11.day1_H$Date.Time)
+p_11.day2_H$Date.Time<-as.character(p_11.day2_H$Date.Time)
+p_11.day1_T$Date.Time<-as.character(p_11.day1_T$Date.Time)
+p_11.day2_T$Date.Time<-as.character(p_11.day2_T$Date.Time)
+```
+
+
+
+```{r}
+
+P11_H<-rbind(p_11.day1_H,p_11.day2_H)
+P11_T<-rbind(p_11.day1_T,p_11.day2_T)
+
+
+P11<-P11_H %>% inner_join(P11_T, by = c("Date.Time"="Date.Time"))
+P11<-P11 %>% 
+  rename(
+    Humidity = Value.x,
+    Temperature=Value.y,
+    Unit.H = Unit.x,
+    Unit.T = Unit.y
+    )
+split<-str_split_fixed(P11$Date.Time, " ", 2)
+P11$Date<-as.character(split[,1])
+P11$Time<-as.character(split[,2]) 
+
+### Change 12-hour clock into 24-hour clock 
+x<-format(strptime(P11$Time, "%I:%M:%S %p"), "%H:%M:%S")
+
+P11_2009 <-P11[ grep("2009", P11$Date),]
+P11<-P11[- grep("2009", P11$Date),]
+
+
+add_zero<-rep("0",nrow(P11))
+P11$Date<-paste(add_zero, P11$Date, sep="")
+x<-format(strptime(P11$Time, "%I:%M:%S %p"), "%H:%M:%S")
+x<-as.POSIXct(x, format = "%H:%M:%S")
+t<-x - 1 
+t<-str_split_fixed(t, " ", 2)
+P11$Time<-t[,2]
+P11$Time_line <- paste(P11$Date,P11$Time)
+
+```
+
+```{r}
+P11_2009$Date<-substring(P11_2009$Date, 3)
+P11_2009$Time<-stringr::str_pad(P11_2009$Time, 5, side = "left", pad = 0)
+P11_2009$Time<-paste0(P11_2009$Time, ":00")
+
+index<-which(P11_2009$Date.Time== "2009/9/19 23:51")	
+P11_2009_sub<-P11_2009[1:index,]
+P11_2009<-P11_2009[-(1:index),]
+P11_2009_sub$Date<-paste0(substring(P11_2009_sub$Date, 1,3), "0",substring(P11_2009_sub$Date, 4,7))
+P11_2009<-rbind(P11_2009_sub,P11_2009)
+
+index_One<-which(P11_2009$Date.Time== "2009/3/19 13:06")
+P11_2009_fix<-P11_2009[index_One:3246,]
+P11_2009<-P11_2009[-(index_One:3246),]
+
+x<-as.POSIXct(P11_2009_fix$Time, format = "%H:%M:%S")
+
+t<-x - 1*60
+t<-str_split_fixed(t, " ", 2)
+P11_2009_fix$Time<-t[,2]
+
+P11_2009_fix$Time_line <- paste(P11_2009_fix$Date,P11_2009_fix$Time)
+P11_2009$Time_line <- paste(P11_2009$Date,P11_2009$Time)
+P11_2009<-rbind(P11_2009,P11_2009_fix)
+P11<-rbind(P11,P11_2009)
+unique(P11$Date)
+```
+
+
+
+```{r}
+HOBO_P11 <- readLines("P_11/20680963_id11.csv")
+Sys.setlocale('LC_ALL','C')
+HOBO_P11 <- grep("Node Name,RTC_date", HOBO_P11, invert=TRUE, value=TRUE)
+HOBO_P11 <- read.csv(textConnection(paste0(HOBO_P11, collapse="\n")),
+                  header=FALSE, stringsAsFactors=FALSE)
+HOBO_P11<-HOBO_P11[-1,]
+names(HOBO_P11) <- as.matrix(HOBO_P11[1, ])
+HOBO_P11 <- HOBO_P11[-1, ]
+rownames(HOBO_P11) <- HOBO_P11[,1]
+HOBO_P11$Temp<-HOBO_P11[,3]
+HOBO_P11$DewPt <-HOBO_P11[,5]
+HOBO_P11<-HOBO_P11[,-c(1,3,5,6,7)]
+
+
+
+HOBO_P11<-HOBO_P11 %>% 
+  rename(
+    Date.Time = `Date Time, GMT-04:00`,
+    RH = `RH, % (LGR S/N: 20680963, SEN S/N: 20680963)`
+    )
+
+split<-str_split_fixed(HOBO_P11$Date.Time, " ", 2)
+HOBO_P11$Date<-as.character(split[,1])
+HOBO_P11$Time<-as.character(split[,2]) 
+HOBO_P11$Time<-format(strptime(HOBO_P11$Time, "%I:%M:%S %p"), "%H:%M:%S")
+HOBO_P11$Time_line <- paste(HOBO_P11$Date,HOBO_P11$Time)
+```
+
+
+```{r}
+HOBO_P11$Time_line <-as.character(HOBO_P11$Time_line)
+P11$Time_line <-as.character(P11$Time_line)
+
+full_P11<-HOBO_P11 %>% full_join(P11, by = c("Time_line"="Time_line"))
+
+full_P11<-full_P11[,-c(1,5,6,8)]
+
+
+full_P11<-full_P11%>% 
+  rename(
+    Date = Date.y,
+    Time = Time.y
+    )
+```
+
+
+
+
+
+```{r pressure, echo=FALSE}
+p_12.day1_H<-read.csv("P_12/H_5B0000005EDB4141_090319.csv")
+p_12.day2_H<-read.csv("P_12/H_5B0000005EDB4141_090619.csv")
+p_12.day1_T<-read.csv("P_12/T_5B0000005EDB4141_090319.csv")
+p_12.day2_T<-read.csv("P_12/T_5B0000005EDB4141_090619.csv")
+p_12.day1_H$Date.Time<-as.character(p_12.day1_H$Date.Time)
+p_12.day2_H$Date.Time<-as.character(p_12.day2_H$Date.Time)
+p_12.day1_T$Date.Time<-as.character(p_12.day1_T$Date.Time)
+p_12.day2_T$Date.Time<-as.character(p_12.day2_T$Date.Time)
+```
+
+
+
+```{r}
+
+P12_H<-rbind(p_12.day1_H,p_12.day2_H)
+P12_T<-rbind(p_12.day1_T,p_12.day2_T)
+
+
+P12<-P12_H %>% inner_join(P12_T, by = c("Date.Time"="Date.Time"))
+P12<-P12 %>% 
+  rename(
+    Humidity = Value.x,
+    Temperature=Value.y,
+    Unit.H = Unit.x,
+    Unit.T = Unit.y
+    )
+
+split<-str_split_fixed(P12$Date.Time, " ", 2)
+P12$Date<-as.character(split[,1])
+P12$Time<-as.character(split[,2]) 
+unique(P12$Date)
+### Change 12-hour clock into 24-hour clock 
+x<-format(strptime(P12$Time, "%I:%M:%S %p"), "%H:%M:%S")
+
+P12$Date<-substring(P12$Date, 3)
+P12$Time<-stringr::str_pad(P12$Time, 5, side = "left", pad = 0)
+P12$Time<-paste0(P12$Time, ":00")
+
+
+P12$Date<-paste0(substring(P12$Date, 1,3), "0",substring(P12$Date, 4,7))
+
+
+
+P12$Time_line <- paste(P12$Date,P12$Time)
+
+```
+
+```{r}
+
+HOBO_P12 <- readLines("P_12/20680972_id12.csv")
+Sys.setlocale('LC_ALL','C')
+HOBO_P12 <- grep("Node Name,RTC_date", HOBO_P12, invert=TRUE, value=TRUE)
+HOBO_P12 <- read.csv(textConnection(paste0(HOBO_P12, collapse="\n")),
+                  header=FALSE, stringsAsFactors=FALSE)
+HOBO_P12<-HOBO_P12[-1,]
+names(HOBO_P12) <- as.matrix(HOBO_P12[1, ])
+HOBO_P12 <- HOBO_P12[-1, ]
+rownames(HOBO_P12) <- HOBO_P12[,1]
+HOBO_P12$Temp<-HOBO_P12[,3]
+HOBO_P12$DewPt <-HOBO_P12[,5]
+HOBO_P12<-HOBO_P12[,-c(1,3,5,6,7)]
+
+
+HOBO_P12<-HOBO_P12 %>% 
+  rename(
+   
+    RH = `RH, % (LGR S/N: 20680972, SEN S/N: 20680972)`
+    )
+
+split<-str_split_fixed(HOBO_P12$`Date Time, GMT-04:00`, " ", 2)
+HOBO_P12$Date<-as.character(split[,1])
+HOBO_P12$Time<-as.character(split[,2]) 
+HOBO_P12$Time<-format(strptime(HOBO_P12$Time, "%I:%M:%S %p"), "%H:%M:%S")
+HOBO_P12$Time_line <- paste(HOBO_P12$Date,HOBO_P12$Time)
+```
+
+
+```{r}
+HOBO_P12$Time_line <-as.character(HOBO_P12$Time_line)
+P12$Time_line <-as.character(P12$Time_line)
+
+full_P12<-HOBO_P12 %>% full_join(P11, by = c("Time_line"="Time_line"))
+
+full_P12<-full_P12[,-c(1,5,6,8)]
+
+
+full_P12<-full_P12%>% 
+  rename(
+    Date = Date.y,
+    Time = Time.y
+    )
+```
+
+## Stack Participant 5, Participant 6, Participant 7, Participant 9, Participant 11
+
+
+```{r}
+full_P5$ID<-rep("Participant 5", nrow(full_P5))
+full_P6$ID<-rep("Participant 6", nrow(full_P6))
+full_P7$ID<-rep("Participant 7", nrow(full_P7))
+full_P9$ID<-rep("Participant 9", nrow(full_P9))
+full_P11$ID<-rep("Participant 11", nrow(full_P11))
+full_P12$ID<-rep("Participant 12", nrow(full_P12))
+Aggregated_data<-rbind(full_P5,full_P6,full_P9, full_P11,full_P12)
+
+write.csv(Aggregated_data,"Aggregated_data.csv",row.names = FALSE)
+Aggregated_data$Date<-as.character(Aggregated_data$Date)
+Aggregated_data$Temp<-as.numeric(Aggregated_data$Temp)
+
+```
+
+
+```{r}
+Aggregated_data<-Aggregated_data%>% group_by(Date)%>% mutate(mean_Temp = mean(Temp))
+mu_Temp<-mean(Aggregated_data$mean_Temp)
+Aggregated_data$Period<-ifelse(Aggregated_data$mean_Temp>mu_Temp,"Period 1", "Period 2")
+write.csv(Aggregated_data,"Aggregated_data.csv",row.names = FALSE)
+
+tab<-Aggregated_data%>% group_by(Date)%>% summarise(mean_Temp = mean(Temp))
+tab$Period<-ifelse(tab$mean_Temp>mu_Temp,"Period 1", "Period 2")
+
+ggplot(data=tab, aes(x=Date, y=mean_Temp , fill=Period)) +
+  geom_bar(stat="identity")+
+  theme_minimal()+ theme(axis.text.x = element_text(angle = 90))+ geom_hline(yintercept=mu_Temp)
+
+```
+
+
+```{r}
+Aggregated_data$RH<-as.numeric(Aggregated_data$RH)
+Aggregated_data$DewPt<-as.numeric(Aggregated_data$DewPt)
+Aggregated_data$Humidity<-as.numeric(Aggregated_data$Humidity)
+Aggregated_data$Temperature<-as.numeric(Aggregated_data$Temperature)
+Box_plot <- function(Data, y_value, Group.by) {
+  ggplot(Data, aes(x=Group.by, y=y_value, fill=Group.by)) +geom_boxplot(alpha=0.3) +
+    theme(legend.position="none") + theme(axis.text.x = element_text(angle = 45))
+}
+
+hobo_temp<-print(Box_plot(Aggregated_data,Aggregated_data$Temp,Aggregated_data$ID) + labs(y="Temperature Ibutton", x = "Participant ID")+ ggtitle("HOBO Temperature"))
+hobo_rh<-print(Box_plot(Aggregated_data,Aggregated_data$RH,Aggregated_data$ID) + labs(y="Relative Humidity", x = "Participant ID")+ ggtitle("HOBO Relative Humidity"))
+print(Box_plot(Aggregated_data,Aggregated_data$DewPt,Aggregated_data$ID) + labs(y="DewPt", x = "Participant ID")+ggtitle("HOBO DewPt"))
+ib_rh<-print(Box_plot(Aggregated_data,Aggregated_data$Humidity,Aggregated_data$ID) + labs(y="Humidity", x = "Participant ID")+ggtitle("iButton Humidity"))
+ib_temp<-print(Box_plot(Aggregated_data,Aggregated_data$Temperature,Aggregated_data$ID) + labs(y="Temperature", x = "Participant ID")+ggtitle("iButton Temperature"))
+```
+
+
+
+```{r}
+ggarrange(hobo_temp, ib_temp, hobo_rh,ib_temp,
+                    labels = c("A", "B", "C","D"),
+                    ncol = 2, nrow = 2)
+```
+
+```{r}
+dates <- "August 24 2012"
+try<-Aggregated_data$Date[1:3]
+typeof(try)
+library(lubridate)
+Aggregated_data$Date=format(mdy(Aggregated_data$Date), "%m/%d/%Y")
+typeof(b)
+b<-format(as.Date(dates, "%B %d %Y"), "%m/%d/%Y")
+mydates <- as.Date(c)
+strDates <- c("01/05/1965", "08/16/1975")
+dates <- as.Date(strDates, "%m/%d/%Y")
+dates <- as.Date(Aggregated_data$Date, "%m/%d/%Y")
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
